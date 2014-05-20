@@ -21,7 +21,8 @@ main = do
            : (8, Vec3D ( 5,  1,  1))
            : (9, Vec3D ( 1,  5, -5))
            : [] :: [(Int, Vec3D)]
-        tree = KD.insertList xs
+        tree = KD.fromList xs
 
     putStrLn $ KD.prettyPrint tree
-    putStrLn $ show $ fromMaybe (-1) $ KD.nearestNeighbor tree $ Vec3D (5, 5, 2)
+    putStrLn $ show $ KD.toList tree
+    putStrLn $ show $ KD.kNearestNeighbors tree (Vec3D (5, 5, 2)) 5

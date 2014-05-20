@@ -22,11 +22,11 @@ data KDtree a = Node
                 deriving (Show)
 
 instance F.Foldable KDtree where
-    foldl func i Leaf = i
-    foldl func i (Node (obj, _) _ r l) =
-        let a = F.foldl func i l
-            b = func a obj
-        in  F.foldl func b r
+    foldr func i Leaf = i
+    foldr func i (Node (obj, _) _ r l) =
+        let a = F.foldr func i r
+            b = func obj a
+        in  F.foldr func b l
 
 prettyPrint :: (Show a) => KDtree a -> String
 prettyPrint Leaf = "Leaf\n"
@@ -48,19 +48,22 @@ coord Z = vZ
 
 ---------------------------------------------------------
 
-insertList :: [(a, Vec3D)] -> KDtree a
-insertList xs = insertList' xs X
+fromList :: [(a, Vec3D)] -> KDtree a
+fromList xs = fromList' xs X
 
-insertList' :: [(a, Vec3D)] -> Axis -> KDtree a
-insertList' [] _    = Leaf
-insertList' xs axis = Node
+fromList' :: [(a, Vec3D)] -> Axis -> KDtree a
+fromList' [] _    = Leaf
+fromList' xs axis = Node
                         { kdObject = m
                         , kdAxis   = axis
-                        , kdRight  = insertList' r $ next axis
-                        , kdLeft   = insertList' l $ next axis
+                        , kdRight  = fromList' r $ next axis
+                        , kdLeft   = fromList' l $ next axis
                         }
     where sorted   = L.sortBy (\(_, a) (_, b) -> let c = coord axis in compare (c a) (c b)) xs
           (l, m:r) = L.splitAt (length sorted `div` 2) sorted
+
+toList :: KDtree a -> [a]
+toList = F.foldr (:) []
 
 nearestNeighbor :: KDtree a -> Vec3D -> Maybe a
 nearestNeighbor tree pos = fst <$> nearestNeighbor' tree pos
@@ -81,3 +84,18 @@ nearestNeighbor' (Node (obj, pos) axis l r) pt =
           cmpPts (Just a) _        = Just a
           cmpPts _        (Just b) = Just b
           cmpPts _        _        = Nothing
+
+kNearestNeighbors :: KDtree a -> Vec3D -> Int -> [a]
+kNearestNeighbors tree pos num = map fst $ kNearestNeighbors' tree pos num
+
+kNearestNeighbors' :: KDtree a -> Vec3D -> Int -> [(a, Float)]
+kNearestNeighbors' Leaf _ _ = []
+kNearestNeighbors' (Node (obj, pos) axis l r) pt num
+    | largest > (offset * offset) = take num $ foldl (flip $ L.insertBy cmpPts) newList $ kNearestNeighbors' other pt num
+    | otherwise                   = newList
+    where offset       = coord axis pt - coord axis pos
+          (sub, other) = if offset > 0 then (r, l) else (l, r)
+          sqDist       = vSqLen $ vSub pos pt
+          newList      = take num $ L.insertBy cmpPts (obj, sqDist) $ kNearestNeighbors' sub pt num
+          largest      = snd $ last newList
+          cmpPts a b   = snd a `compare` snd b
